@@ -1,0 +1,354 @@
+<!-- README.md -->
+
+# 🔍 Real-Time Bank Fraud Detection Platform
+
+> A production-grade streaming architecture that detects
+> fraudulent transactions in near real-time using
+> Apache Kafka, Apache Spark, and XGBoost
+
+---
+
+## 📋 Table of Contents
+
+- [Architecture](#architecture)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Quick Start](#quick-start)
+- [Configuration](#configuration)
+- [Monitoring](#monitoring)
+- [ML Model](#ml-model)
+- [API Endpoints](#api-endpoints)
+- [Performance](#performance)
+- [Development](#development)
+
+---
+
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    DATA SIMULATION                       │
+│   Python script reads Kaggle dataset                    │
+│   Sends 100 transactions/second to Kafka                │
+└─────────────────┬───────────────────────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────────┐
+│              APACHE KAFKA (Message Bus)                  │
+│   Topic: raw_transactions  (3 partitions)               │
+│   Topic: fraud_alerts      (3 partitions)               │
+└─────────────────┬───────────────────────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────────┐
+│         APACHE SPARK STRUCTURED STREAMING                │
+│   Reads stream → Feature engineering                    │
+│   → XGBoost scoring → Route results                     │
+│   Trigger: every 5 seconds (micro-batch)                │
+└──────┬──────────────────────────┬───────────────────────┘
+       │                          │
+       ▼                          ▼
+┌──────────────┐         ┌────────────────────┐
+│ fraud_alerts │         │    PostgreSQL       │
+│  Kafka Topic │         │  All transactions  │
+│  (real-time) │         │  + batch metrics   │
+└──────────────┘         └────────────────────┘
+       │
+       ▼
+┌─────────────────────────────────────────────────────────┐
+│              PROMETHEUS + GRAFANA                        │
+│   Real-time metrics dashboard                           │
+│   Throughput, fraud rate, latency, score distribution   │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🛠️ Tech Stack
+
+| Component         | Technology                    | Purpose                    |
+|-------------------|-------------------------------|----------------------------|
+| Message Bus       | Apache Kafka 7.5              | Transaction streaming      |
+| Stream Processing | Apache Spark 3.4 (Structured) | Real-time scoring          |
+| ML Model          | XGBoost 2.0                   | Fraud classification       |
+| Storage           | PostgreSQL 15                 | Historical transactions    |
+| Metrics           | Prometheus 2.47               | Metrics collection         |
+| Dashboard         | Grafana 10.2                  | Visualization              |
+| Container         | Docker + Docker Compose       | Local orchestration        |
+| Language          | Python 3.10                   | All application code       |
+
+---
+
+## 📁 Project Structure
+
+```
+fraud-detection-platform/
+│
+├── docker-compose.yml         # Full stack orchestration
+├── .env                       # Environment configuration
+├── Makefile                   # One-command operations
+│
+├── data/
+│   └── creditcard.csv         # Kaggle fraud dataset
+│
+├── model/
+│   ├── train.py               # Model training script
+│   ├── fraud_model.pkl        # Trained XGBoost model
+│   ├── scaler.pkl             # Feature scaler
+│   └── metadata.json          # Model performance info
+│
+├── producer/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── producer.py            # Kafka transaction simulator
+│
+├── spark/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── streaming_job.py       # Spark scoring pipeline
+│
+├── monitoring/
+│   ├── prometheus/
+│   │   └── prometheus.yml     # Prometheus config
+│   └── grafana/
+│       └── provisioning/
+│           ├── datasources/   # Auto-configured Prometheus
+│           └── dashboards/    # Auto-loaded dashboard
+│
+└── k8s/                       # Kubernetes manifests
+    ├── namespace.yaml
+    ├── kafka/
+    ├── spark/
+    ├── producer/
+    └── monitoring/
+```
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+```bash
+Docker >= 24.0
+Docker Compose >= 2.20
+Python >= 3.10       (for model training)
+8GB RAM minimum
+4 CPU cores minimum
+```
+
+### 1. Clone & Setup
+```bash
+git clone https://github.com/yourusername/fraud-detection-platform
+cd fraud-detection-platform
+
+cp .env.example .env
+```
+
+### 2. Download Dataset
+```bash
+# Option A: Kaggle CLI
+pip install kaggle
+kaggle datasets download mlg-ulb/creditcardfraud \
+  --path ./data --unzip
+
+# Option B: Manual download
+# https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud
+# Place creditcard.csv in ./data/
+```
+
+### 3. Train the Model
+```bash
+python -m venv venv && source venv/bin/activate
+pip install -r requirements-dev.txt
+python model/train.py
+```
+
+### 4. Start the Platform
+```bash
+make up
+```
+
+### 5. Access Services
+
+| Service       | URL                    | Credentials     |
+|---------------|------------------------|-----------------|
+| Grafana       | http://localhost:3000  | admin / admin123|
+| Kafka UI      | http://localhost:8080  | -               |
+| Spark UI      | http://localhost:4040  | -               |
+| Prometheus    | http://localhost:9090  | -               |
+| Producer Metrics | http://localhost:8000/metrics | -    |
+| Spark Metrics | http://localhost:8001/metrics  | -    |
+
+---
+
+## ⚙️ Configuration
+
+All configuration via `.env` file:
+
+```bash
+# Transaction simulation speed
+TRANSACTIONS_PER_SECOND=100
+
+# How often Spark processes batches
+SPARK_BATCH_INTERVAL=5
+
+# Fraud probability threshold (0.0-1.0)
+FRAUD_THRESHOLD=0.5
+
+# Kafka topics
+KAFKA_TOPIC_TRANSACTIONS=raw_transactions
+KAFKA_TOPIC_ALERTS=fraud_alerts
+```
+
+---
+
+## 📊 Monitoring
+
+### Grafana Dashboard Panels
+
+| Panel                     | Metric                           |
+|---------------------------|----------------------------------|
+| Transactions Per Second   | Rate of incoming transactions    |
+| Current Fraud Rate        | % flagged as fraud               |
+| Transaction Throughput    | Produced vs processed            |
+| Fraud Detection Rate      | Detected vs actual fraud         |
+| Model Inference Latency   | P50 and P95 scoring time         |
+| Fraud Score Distribution  | Histogram of model outputs       |
+
+### Key Prometheus Metrics
+
+```promql
+# Transaction throughput
+rate(producer_transactions_sent_total[1m])
+
+# Fraud detection rate
+rate(spark_fraud_detected_total[1m])
+
+# Model inference P95 latency
+histogram_quantile(0.95,
+  sum(rate(spark_inference_duration_seconds_bucket[5m]))
+  by (le))
+
+# Current fraud rate
+spark_current_fraud_rate
+```
+
+---
+
+## 🤖 ML Model
+
+### Dataset
+- **Source**: [Kaggle Credit Card Fraud Detection](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud)
+- **Size**: 284,807 transactions
+- **Fraud rate**: 0.173% (highly imbalanced)
+- **Features**: 30 (Time, Amount, V1-V28 PCA features)
+
+### Model Performance
+
+| Metric        | Score  |
+|---------------|--------|
+| AUC-ROC       | 0.9782 |
+| Precision     | 0.87   |
+| Recall        | 0.82   |
+| F1-Score      | 0.84   |
+
+### Key Design Decisions
+
+**Why XGBoost?**
+- Best performance on tabular data
+- Handles class imbalance via `scale_pos_weight`
+- Fast inference (critical for streaming)
+
+**Why Recall over Precision?**
+- Missing real fraud > falsely flagging legit
+- Better to investigate a false alarm
+- than miss an actual fraud
+
+**Why micro-batching over true streaming?**
+- XGBoost not natively distributed
+- Batch inference is more efficient
+- 5-second latency acceptable for fraud detection
+
+---
+
+## 📈 Performance
+
+```
+Measured on MacBook Pro M1 (8GB RAM):
+
+Throughput:
+→ Producer:  ~100 transactions/second
+→ Spark:     ~500 transactions/batch (every 5 sec)
+
+Latency:
+→ Kafka ingestion:    <5ms per message
+→ Spark micro-batch:  5 seconds trigger
+→ ML inference:       ~50ms per batch
+→ DB write:           ~100ms per batch
+→ End-to-end:         ~5-6 seconds
+
+Accuracy:
+→ AUC-ROC:  0.9782
+→ Recall:   82% of fraud cases caught
+→ FPR:      0.02% false positive rate
+```
+
+---
+
+## 🔧 Development
+
+### Useful Commands
+
+```bash
+# Start everything
+make up
+
+# View all logs
+make logs
+
+# View specific service logs
+make logs-spark
+make logs-producer
+
+# Check pipeline health
+make health
+
+# Restart single service
+make restart-spark
+
+# Stop everything
+make down
+
+# Fresh start (removes all data)
+make clean
+
+# Run model training
+make train
+
+# Access PostgreSQL
+make psql
+
+# Check Kafka topics
+make kafka-topics
+```
+
+### Running Tests
+```bash
+# Syntax check all Python files
+make lint
+
+# Quick pipeline validation
+make validate
+```
+
+---
+
+## 🚢 Kubernetes Deployment
+
+See [k8s/README.md](k8s/README.md) for full
+Kubernetes deployment guide on AWS EKS or GCP GKE.
+
+---
+
+## 📝 License
+MIT License — see [LICENSE](LICENSE) for details

@@ -1,0 +1,46 @@
+# monitoring/prometheus/prometheus.yml
+
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+  scrape_timeout:      10s
+
+# Alerting rules (optional for now)
+rule_files:
+  # - "alert_rules/*.yml"
+
+scrape_configs:
+
+  # ── PROMETHEUS ITSELF ───────────────────────────────────────
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # ── PRODUCER METRICS ────────────────────────────────────────
+  - job_name: 'fraud-producer'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['producer:8000']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'fraud-producer'
+
+  # ── SPARK STREAMING METRICS ─────────────────────────────────
+  - job_name: 'fraud-spark'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['spark:8001']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'fraud-spark'
+
+  # ── POSTGRESQL EXPORTER (OPTIONAL) ──────────────────────────
+  # - job_name: 'postgres'
+  #   static_configs:
+  #     - targets: ['postgres-exporter:9187']
+  #   relabel_configs:
+  #     - source_labels: [__address__]
+  #       target_label: instance
+  #       replacement: 'postgres-db'
