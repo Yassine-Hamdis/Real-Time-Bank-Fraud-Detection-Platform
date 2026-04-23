@@ -1,5 +1,3 @@
-# Makefile
-
 .PHONY: up down restart logs health clean train \
         psql kafka-topics lint validate \
         logs-spark logs-producer logs-kafka
