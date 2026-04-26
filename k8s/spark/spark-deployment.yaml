@@ -1,0 +1,113 @@
+# k8s/spark/spark-deployment.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fraud-spark
+  namespace: fraud-detection
+  labels:
+    app: fraud-spark
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fraud-spark
+  template:
+    metadata:
+      labels:
+        app: fraud-spark
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8001"
+        prometheus.io/path: "/metrics"
+    spec:
+      initContainers:
+        - name: wait-for-kafka
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z kafka 9092; do
+                echo "Waiting for Kafka..."
+                sleep 5
+              done
+        - name: wait-for-postgres
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z postgres 5432; do
+                echo "Waiting for PostgreSQL..."
+                sleep 5
+              done
+      containers:
+        - name: spark
+          image: YOUR_REGISTRY/fraud-spark:1.0
+          ports:
+            - containerPort: 4040
+              name: spark-ui
+            - containerPort: 8001
+              name: metrics
+          envFrom:
+            - configMapRef:
+                name: spark-config
+          env:
+            # Get DB password from secret
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_PASSWORD
+          volumeMounts:
+            - name: model
+              mountPath: /model
+              readOnly: true
+            - name: spark-checkpoints
+              mountPath: /tmp/spark-checkpoints
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "1000m"
+            limits:
+              memory: "4Gi"
+              cpu: "2000m"
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: 8001
+            initialDelaySeconds: 90
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: 8001
+            initialDelaySeconds: 60
+            periodSeconds: 15
+      volumes:
+        - name: model
+          hostPath:
+            path: /model
+            type: Directory
+        - name: spark-checkpoints
+          emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fraud-spark
+  namespace: fraud-detection
+  labels:
+    app: fraud-spark
+spec:
+  selector:
+    app: fraud-spark
+  ports:
+    - port: 4040
+      targetPort: 4040
+      name: spark-ui
+    - port: 8001
+      targetPort: 8001
+      name: metrics

@@ -1,0 +1,92 @@
+# k8s/producer/producer-deployment.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fraud-producer
+  namespace: fraud-detection
+  labels:
+    app: fraud-producer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fraud-producer
+  template:
+    metadata:
+      labels:
+        app: fraud-producer
+      annotations:
+        # Tells Prometheus to scrape this pod
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      initContainers:
+        # Wait for Kafka before starting
+        - name: wait-for-kafka
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z kafka 9092; do
+                echo "Waiting for Kafka..."
+                sleep 5
+              done
+              echo "Kafka is ready!"
+      containers:
+        - name: producer
+          image: YOUR_REGISTRY/fraud-producer:1.0
+          ports:
+            - containerPort: 8000
+              name: metrics
+          envFrom:
+            - configMapRef:
+                name: producer-config
+          volumeMounts:
+            - name: dataset
+              mountPath: /data
+              readOnly: true
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+      volumes:
+        - name: dataset
+          # On cloud: use PVC backed by S3/GCS
+          # For local kind: use hostPath
+          hostPath:
+            path: /data
+            type: Directory
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fraud-producer
+  namespace: fraud-detection
+  labels:
+    app: fraud-producer
+spec:
+  selector:
+    app: fraud-producer
+  ports:
+    - port: 8000
+      targetPort: 8000
+      name: metrics

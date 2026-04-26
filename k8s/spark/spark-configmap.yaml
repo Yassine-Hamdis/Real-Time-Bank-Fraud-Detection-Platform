@@ -1,0 +1,20 @@
+# k8s/spark/spark-configmap.yaml
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spark-config
+  namespace: fraud-detection
+data:
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  KAFKA_TOPIC_TRANSACTIONS: "raw_transactions"
+  KAFKA_TOPIC_ALERTS: "fraud_alerts"
+  MODEL_PATH: "/model/fraud_model.pkl"
+  SCALER_PATH: "/model/scaler.pkl"
+  FRAUD_THRESHOLD: "0.5"
+  SPARK_BATCH_INTERVAL: "5"
+  PROMETHEUS_PORT: "8001"
+  POSTGRES_HOST: "postgres"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "fraud_detection"
+  POSTGRES_USER: "fraud_user"

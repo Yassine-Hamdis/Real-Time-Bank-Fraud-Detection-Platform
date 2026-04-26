@@ -1,0 +1,37 @@
+# k8s/kafka/kafka-service.yaml
+
+# Headless service for StatefulSet
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-headless
+  namespace: fraud-detection
+  labels:
+    app: kafka
+spec:
+  clusterIP: None
+  selector:
+    app: kafka
+  ports:
+    - port: 29092
+      name: internal
+
+---
+# Regular service for app access
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  namespace: fraud-detection
+  labels:
+    app: kafka
+spec:
+  selector:
+    app: kafka
+  ports:
+    - port: 9092
+      targetPort: 9092
+      name: external
+    - port: 29092
+      targetPort: 29092
+      name: internal

@@ -1,0 +1,48 @@
+# k8s/monitoring/grafana-configmap.yaml
+
+# Datasource provisioning
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: fraud-detection
+data:
+  prometheus.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true
+
+---
+# Dashboard provisioning config
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards-config
+  namespace: fraud-detection
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: 'fraud-detection'
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        options:
+          path: /var/lib/grafana/dashboards
+
+---
+# Dashboard JSON
+# (reference our existing dashboard JSON)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-json
+  namespace: fraud-detection
+data:
+  fraud_dashboard.json: |
+    PASTE_YOUR_DASHBOARD_JSON_HERE

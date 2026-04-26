@@ -1,0 +1,14 @@
+# k8s/producer/producer-configmap.yaml
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: producer-config
+  namespace: fraud-detection
+data:
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  KAFKA_TOPIC_TRANSACTIONS: "raw_transactions"
+  KAFKA_TOPIC_ALERTS: "fraud_alerts"
+  TRANSACTIONS_PER_SECOND: "100"
+  DATASET_PATH: "/data/creditcard.csv"
+  PROMETHEUS_PORT: "8000"
